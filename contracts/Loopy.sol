@@ -2,12 +2,12 @@
 pragma solidity 0.8.17;
 
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
-import '@openzeppelin/contracts/access/Ownable.sol';
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import './interfaces/IFlashLoanRecipient.sol';
-import './PloopyConstants.sol';
+import './LoopyConstants.sol';
 
-contract Ploopy is IPloopy, PloopyConstants, Ownable, IFlashLoanRecipient, ReentrancyGuard {
+contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, ReentrancyGuard {
   using SafeERC20 for IERC20;
   // add mapping of token addresses to their decimal places
   mapping(IERC20 => uint8) public decimals;
@@ -81,14 +81,30 @@ contract Ploopy is IPloopy, PloopyConstants, Ownable, IFlashLoanRecipient, Reent
   event lTokenBalance(uint256 balanceAmount);
   event Received(address, uint);
 
-  function addToken(IERC20 token) external onlyOwner {
-      require(!allowedTokens[token], "token already allowed");
-      allowedTokens[token] = true;
+  function addToken(ICERC20 _lTokenAddress, string _lTokensymbol, uint256 decimals, IERC20 _tokenAddress, string _tokenSymbol) external onlyOwner {
+      // TODO: FINISH ME
+
+      // get underlying decimals, symbol, and address
+      ICERC20 internal constant symbol = ICERC20(_lTokenAddress);
+      uint256 _decimals = symbol.get
+      require(!allowedTokens[_tokenAddress], "token already allowed");
+
+      // add to our obvious lists
+
+      // create our IERC20 object and map it accordingly
+      IERC20 internal constant _symbol = IERC20(_tokenAddress);
+      ICERC20 internal constant _lTokenSymbol = ICERC20(_lTokenAddress);
+      decimals[_symbol] = _decimals;
+      allowedTokens[_tokenAddress] = true;
+      lTokenMapping[_symbol] = _lTokenSymbol;
+
+      // approve the lToken market to be able to spend the newly added underlying
+
   }
 
-  function removeToken(IERC20 token) external onlyOwner {
-      require(allowedTokens[token], "token not allowed");
-      allowedTokens[token] = false;
+  function removeToken(IERC20 _tokenAddress) external onlyOwner {
+      require(allowedTokens[_tokenAddress], "token not allowed");
+      allowedTokens[_tokenAddress] = false;
   }
 
   // allows users to loop to a desired leverage, within our pre-set ranges
@@ -133,24 +149,28 @@ contract Ploopy is IPloopy, PloopyConstants, Ownable, IFlashLoanRecipient, Reent
       );
     }
 
+    // factor in any balancer fees into the overall loan amount we wish to borrow
+    uint256 currentBalancerFeeAmount = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
+    uint256 loanAmountFactoringInFeeAmount = loanAmount + currentBalancerFeeAmount;
+
     if (_tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmount) revert FAILED('balancer vault token balance < loan');
-    emit Loan(loanAmount);
+    emit Loan(loanAmountFactoringInFeeAmount);
     emit BalanceOf(_tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmount);
 
     IERC20[] memory tokens = new IERC20[](1);
     tokens[0] = _tokenToBorrow;
 
     uint256[] memory loanAmounts = new uint256[](1);
-    loanAmounts[0] = loanAmount;
+    loanAmounts[0] = loanAmountFactoringInFeeAmount;
 
     UserData memory userData = UserData({
       user: msg.sender,
       tokenAmount: _amount,
       borrowedToken: _tokenToBorrow,
-      borrowedAmount: loanAmount,
+      borrowedAmount: loanAmountFactoringInFeeAmount,
       tokenToLoop: _token
     });
-    emit UserDataEvent(msg.sender, _amount, address(_tokenToBorrow), loanAmount, address(_token));
+    emit UserDataEvent(msg.sender, _amount, address(_tokenToBorrow), loanAmountFactoringInFeeAmount, address(_token));
 
     BALANCER_VAULT.flashLoan(IFlashLoanRecipient(this), tokens, loanAmounts, abi.encode(userData));
   }
@@ -171,9 +191,6 @@ contract Ploopy is IPloopy, PloopyConstants, Ownable, IFlashLoanRecipient, Reent
 
     // ensure we borrowed the proper amounts
     if (data.borrowedAmount != amounts[0] || data.borrowedToken != tokens[0]) revert FAILED('borrowed amounts and/or borrowed tokens do not match initially set values');
-
-    // sanity check: flashloan has no fees
-    if (feeAmounts[0] > 0) revert FAILED('balancer fee > 0');
 
     // account for some plvGLP specific logic
     if (data.tokenToLoop == PLVGLP) {

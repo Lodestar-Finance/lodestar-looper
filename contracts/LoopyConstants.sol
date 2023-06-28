@@ -2,10 +2,14 @@
 pragma solidity 0.8.17;
 
 import './interfaces/IVault.sol';
-import { IPloopy, ICERC20, IGlpDepositor, IRewardRouterV2, IPriceOracleProxyETH } from './interfaces/Interfaces.sol';
+import { ILoopy, ICERC20, IGlpDepositor, IRewardRouterV2, IPriceOracleProxyETH, IProtocolFeesCollector} from './interfaces/Interfaces.sol';
 
-contract PloopyConstants {
+contract LoopyConstants {
+  // BALANCER
   IVault internal constant BALANCER_VAULT = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+  IProtocolFeesCollector internal constant BALANCER_PROTOCOL_FEES_COLLECTOR = IProtocolFeesCollector(0xce88686553686DA562CE7Cea497CE749DA109f9F);
+
+  // MISC TOKENS
   IERC20 internal constant USDC = IERC20(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
   IERC20 internal constant ARB = IERC20(0x912CE59144191C1204E64559FE8253a0e49E6548);
   IERC20 internal constant WBTC = IERC20(0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f);

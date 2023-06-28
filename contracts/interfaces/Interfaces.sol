@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
-interface IPloopy {
+interface ILoopy {
   struct UserData {
     address user;
     uint256 tokenAmount;
@@ -73,4 +73,9 @@ interface ICERC20 is IERC20, ICERC20Update {
 
 interface IPriceOracleProxyETH {
   function getUnderlyingPrice(address cToken) external view returns (uint256);
+}
+
+// 6/26/2023: https://docs.balancer.fi/reference/contracts/deployment-addresses/mainnet.html#gauges-and-governance
+interface IProtocolFeesCollector {
+  function getFlashLoanFeePercentage() external view returns (uint256);
 }
