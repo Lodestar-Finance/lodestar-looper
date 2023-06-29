@@ -85,12 +85,12 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
 
   function addToken(IERC20 tokenAddress, uint8 tokenDecimals, ICERC20 lTokenAddress) external onlyOwner {
       require(!allowedTokens[tokenAddress], "token already allowed");
+      allowedTokens[tokenAddress] = true;
 
       // create our IERC20 object and map it accordingly
       ICERC20 _lTokenSymbol = ICERC20(lTokenAddress);
       decimals[tokenAddress] = tokenDecimals;
       lTokenMapping[tokenAddress] = _lTokenSymbol;
-      allowedTokens[tokenAddress] = true;
 
       // approve balance vault and the lToken market to be able to spend the newly added underlying
       tokenAddress.approve(address(VAULT), type(uint256).max);
@@ -99,9 +99,11 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
 
   function removeToken(IERC20 tokenAddress) external onlyOwner {
       require(allowedTokens[tokenAddress], "token not allowed");
+      allowedTokens[tokenAddress] = false;
+
+      // nullify, essentially, existing records
       delete decimals[tokenAddress];
       delete lTokenMapping[tokenAddress];
-      allowedTokens[tokenAddress] = false;
   }
 
   // allows users to loop to a desired leverage, within our pre-set ranges
@@ -141,7 +143,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       // the rest of the contracts just borrow whatever token is supplied
       _tokenToBorrow = _token;
       loanAmount = getNotionalLoanAmountIn1e18(
-        _amount, // we can just send over the exact amount, as we are either looping stables or eth
+        _amount, // we can just send over the exact amount
         _leverage
       );
     }
@@ -189,24 +191,29 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     // ensure we borrowed the proper amounts
     if (data.borrowedAmount != amounts[0] || data.borrowedToken != tokens[0]) revert FAILED('borrowed amounts and/or borrowed tokens do not match initially set values');
 
-    // sanity check: emit whatever the balancer fee is for cleaner event tracking
+    // sanity check: emit whenever the fee for balancer is greater than 0 for tracking purposes
     if (feeAmounts[0] > 0) {
       emit BalancerFeeAmount(feeAmounts[0]);
     }
 
     // account for some plvGLP specific logic
     if (data.tokenToLoop == PLVGLP) {
-      // mint GLP. approval needed.
+
+      uint256 nominalSlippage = 1e16; // 1% slippage tolerance
+      uint256 minumumExpectedSwapAmount = ((data.borrowedAmount) * (1e18 - nominalSlippage)) / 1e18;
+
+      // mint GLP. approval needed
       uint256 glpAmount = REWARD_ROUTER_V2.mintAndStakeGlp(
-        address(data.borrowedToken),
-        data.borrowedAmount,
-        0,
-        0
+        address(data.borrowedToken), // the token to buy GLP with
+        data.borrowedAmount, // the amount of token to use for the purchase
+        0, // the minimum acceptable USD value of the GLP purchased
+        minumumExpectedSwapAmount // the minimum acceptible GLP amount
       );
       if (glpAmount == 0) revert FAILED('glp=0');
+      if (glpAmount < minumumExpectedSwapAmount) revert FAILED('glp amount returned less than minumum expected swap amount');
 
       // TODO whitelist this contract for plvGLP mint
-      // mint plvGLP. approval needed.
+      // mint plvGLP. approval needed
       uint256 _oldPlvglpBal = PLVGLP.balanceOf(address(this));
       GLP_DEPOSITOR.deposit(glpAmount);
 
