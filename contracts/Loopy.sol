@@ -9,6 +9,7 @@ import './LoopyConstants.sol';
 
 contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, ReentrancyGuard {
   using SafeERC20 for IERC20;
+  
   // add mapping of token addresses to their decimal places
   mapping(IERC20 => uint8) public decimals;
   // add mapping to store the allowed tokens. Mapping provides faster access than array
@@ -80,31 +81,27 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
   event plvGLPBalance(uint256 balanceAmount);
   event lTokenBalance(uint256 balanceAmount);
   event Received(address, uint);
+  event BalancerFeeAmount(uint256 amount);
 
-  function addToken(ICERC20 _lTokenAddress, string _lTokensymbol, uint256 decimals, IERC20 _tokenAddress, string _tokenSymbol) external onlyOwner {
-      // TODO: FINISH ME
-
-      // get underlying decimals, symbol, and address
-      ICERC20 internal constant symbol = ICERC20(_lTokenAddress);
-      uint256 _decimals = symbol.get
-      require(!allowedTokens[_tokenAddress], "token already allowed");
-
-      // add to our obvious lists
+  function addToken(IERC20 tokenAddress, uint8 tokenDecimals, ICERC20 lTokenAddress) external onlyOwner {
+      require(!allowedTokens[tokenAddress], "token already allowed");
 
       // create our IERC20 object and map it accordingly
-      IERC20 internal constant _symbol = IERC20(_tokenAddress);
-      ICERC20 internal constant _lTokenSymbol = ICERC20(_lTokenAddress);
-      decimals[_symbol] = _decimals;
-      allowedTokens[_tokenAddress] = true;
-      lTokenMapping[_symbol] = _lTokenSymbol;
+      ICERC20 _lTokenSymbol = ICERC20(lTokenAddress);
+      decimals[tokenAddress] = tokenDecimals;
+      lTokenMapping[tokenAddress] = _lTokenSymbol;
+      allowedTokens[tokenAddress] = true;
 
-      // approve the lToken market to be able to spend the newly added underlying
-
+      // approve balance vault and the lToken market to be able to spend the newly added underlying
+      tokenAddress.approve(address(VAULT), type(uint256).max);
+      tokenAddress.approve(address(_lTokenSymbol), type(uint256).max);
   }
 
-  function removeToken(IERC20 _tokenAddress) external onlyOwner {
-      require(allowedTokens[_tokenAddress], "token not allowed");
-      allowedTokens[_tokenAddress] = false;
+  function removeToken(IERC20 tokenAddress) external onlyOwner {
+      require(allowedTokens[tokenAddress], "token not allowed");
+      delete decimals[tokenAddress];
+      delete lTokenMapping[tokenAddress];
+      allowedTokens[tokenAddress] = false;
   }
 
   // allows users to loop to a desired leverage, within our pre-set ranges
@@ -153,9 +150,9 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     uint256 currentBalancerFeeAmount = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
     uint256 loanAmountFactoringInFeeAmount = loanAmount + currentBalancerFeeAmount;
 
-    if (_tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmount) revert FAILED('balancer vault token balance < loan');
+    if (_tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmountFactoringInFeeAmount) revert FAILED('balancer vault token balance < loan');
     emit Loan(loanAmountFactoringInFeeAmount);
-    emit BalanceOf(_tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmount);
+    emit BalanceOf(_tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmountFactoringInFeeAmount);
 
     IERC20[] memory tokens = new IERC20[](1);
     tokens[0] = _tokenToBorrow;
@@ -191,6 +188,11 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
 
     // ensure we borrowed the proper amounts
     if (data.borrowedAmount != amounts[0] || data.borrowedToken != tokens[0]) revert FAILED('borrowed amounts and/or borrowed tokens do not match initially set values');
+
+    // sanity check: emit whatever the balancer fee is for cleaner event tracking
+    if (feeAmounts[0] > 0) {
+      emit BalancerFeeAmount(feeAmounts[0]);
+    }
 
     // account for some plvGLP specific logic
     if (data.tokenToLoop == PLVGLP) {
