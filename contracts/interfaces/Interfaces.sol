@@ -79,3 +79,7 @@ interface IPriceOracleProxyETH {
 interface IProtocolFeesCollector {
   function getFlashLoanFeePercentage() external view returns (uint256);
 }
+
+interface IGlpOracleInterface {
+  function getGLPPrice() external view returns (uint256);
+}

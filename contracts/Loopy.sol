@@ -200,17 +200,19 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     if (data.tokenToLoop == PLVGLP) {
 
       uint256 nominalSlippage = 1e16; // 1% slippage tolerance
-      uint256 minumumExpectedSwapAmount = ((data.borrowedAmount) * (1e18 - nominalSlippage)) / 1e18;
+      uint256 glpPrice = getGLPPrice(); // returns in 1e18
+      uint256 minumumExpectedUSDCSwapAmount = ((data.borrowedAmount) * (1e18 - nominalSlippage)) / 1e18;
+      uint256 minimumExpectedGlpSwapAmount = glpPrice * minumumExpectedUSDCSwapAmount;
 
       // mint GLP. approval needed
       uint256 glpAmount = REWARD_ROUTER_V2.mintAndStakeGlp(
         address(data.borrowedToken), // the token to buy GLP with
         data.borrowedAmount, // the amount of token to use for the purchase
         0, // the minimum acceptable USD value of the GLP purchased
-        minumumExpectedSwapAmount // the minimum acceptible GLP amount
+        minimumExpectedGlpSwapAmount // the minimum acceptible GLP amount
       );
       if (glpAmount == 0) revert FAILED('glp=0');
-      if (glpAmount < minumumExpectedSwapAmount) revert FAILED('glp amount returned less than minumum expected swap amount');
+      if (glpAmount < minimumExpectedGlpSwapAmount) revert FAILED('glp amount returned less than minumum expected swap amount');
 
       // TODO whitelist this contract for plvGLP mint
       // mint plvGLP. approval needed
@@ -245,6 +247,16 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       // repay loan, where msg.sender = vault
       data.tokenToLoop.safeTransferFrom(data.user, msg.sender, data.borrowedAmount);
     }
+  }
+
+  function getGLPPrice() internal view returns (uint256) {
+    uint256 price = PLVGLP_ORACLE.getGLPPrice();
+    require(price > 0, "invalid glp price returned");
+
+    // price = div_(price, Exp({mantissa: getPriceFromChainlink(ethUsdAggregator)}));
+
+    //glp oracle returns price scaled to 18 decimals, no need to extend here
+    return price;
   }
 
   function getNotionalLoanAmountIn1e18(
