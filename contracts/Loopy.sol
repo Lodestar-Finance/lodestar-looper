@@ -199,10 +199,10 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     // account for some plvGLP specific logic
     if (data.tokenToLoop == PLVGLP) {
 
-      uint256 nominalSlippage = 1e16; // 1% slippage tolerance
+      uint256 nominalSlippage = 1e17 / 2; // 5% slippage tolerance
       uint256 glpPrice = getGLPPrice(); // returns in 1e18
-      uint256 minumumExpectedUSDCSwapAmount = ((data.borrowedAmount) * (1e18 - nominalSlippage)) / 1e18;
-      uint256 minimumExpectedGlpSwapAmount = glpPrice * minumumExpectedUSDCSwapAmount;
+      uint256 minumumExpectedUSDCSwapAmount = (data.borrowedAmount) * (1e18 - nominalSlippage);
+      uint256 minimumExpectedGlpSwapAmount = (minumumExpectedUSDCSwapAmount / (glpPrice / 1e18)) / 1e6;
 
       // mint GLP. approval needed
       uint256 glpAmount = REWARD_ROUTER_V2.mintAndStakeGlp(
