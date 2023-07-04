@@ -106,12 +106,56 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       delete lTokenMapping[tokenAddress];
   }
 
+  function mockLoop(IERC20 _token, uint256 _amount, uint16 _leverage) external view returns (uint256) {
+    {
+      uint256 error;
+      uint256 liquidity;
+      uint256 shortfall;
+      uint256 hypotheticalError;
+      uint256 hypotheticalLiquidity;
+      uint256 hypotheticalShortfall;
+      uint256 hypotheticalSupply;
+
+      // gather current account liquidity, which is the eth denominated value of the maximum borrowable amount before the account reaches a shortfall (negative health aka liquidatable)
+      (error, liquidity, shortfall) = UNITROLLER.getAccountLiquidity(msg.sender);
+      require(error != 0, "Received an error when getting account liquidity during mockLoop");
+
+      uint256 loanAmount;
+      IERC20 tokenToBorrow;
+
+      (loanAmount, tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
+
+      // mock a hypothetical borrow to see what state it puts the account in (before factoring in our new liquidity)
+      (hypotheticalError, hypotheticalLiquidity, hypotheticalShortfall) = UNITROLLER.getHypotheticalAccountLiquidity(msg.sender, address(lTokenMapping[tokenToBorrow]), 0, loanAmount);
+
+      // if the account is still healthy without factoring in our newly supplied balance, we know for a fact they can support this operation.
+      // so let's just return now and not waste any more time
+      if (hypotheticalLiquidity > 0) {
+        return hypotheticalShortfall; // 0
+      } else {
+        // otherwise, lets do some maths
+        // lets get our hypotheticalSupply and and see if it's greater than our hypotheticalShortfall. if it is, we know the account can support this operation
+        hypotheticalSupply = 1;
+      }
+
+      // require success
+      return _amount + 1;
+    }
+  }
+
   // allows users to loop to a desired leverage, within our pre-set ranges
   function loop(IERC20 _token, uint256 _amount, uint16 _leverage, uint16 _useWalletBalance) external {
     require(allowedTokens[_token], "token not allowed to loop");
     require(tx.origin == msg.sender, "not an EOA");
     require(_amount > 0, "amount must be greater than 0");
     require(_leverage >= DIVISOR && _leverage <= MAX_LEVERAGE, "invalid leverage, range must be between DIVISOR and MAX_LEVERAGE values");
+
+    // mock loop when the user wants to use their existing lodestar balance.
+    // if it fails we know the account cannot loop in the current state they are in
+    if (_useWalletBalance == 0) {
+      uint256 shortfall = this.mockLoop(_token, _amount, _leverage);
+      require (shortfall != 0, "Existing balance on Lodestar unable to support operation. Please consider increasing your supply balance first.");
+    }
 
     // if the user wants us to mint using their existing wallet balance (indiciated with 1), then do so.
     // otherwise, read their existing balance and flash loan to increase their position
@@ -122,42 +166,20 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     }
     
     uint256 loanAmount;
-    IERC20 _tokenToBorrow;
+    IERC20 tokenToBorrow;
 
-    if (_token == PLVGLP) {
-      uint256 _tokenPriceInEth;
-      uint256 _usdcPriceInEth;
-      uint256 _computedAmount;
-
-      // plvGLP borrows USDC to loop
-      _tokenToBorrow = USDC;
-      _tokenPriceInEth = PRICE_ORACLE.getUnderlyingPrice(address(lTokenMapping[_token]));
-      _usdcPriceInEth = (PRICE_ORACLE.getUnderlyingPrice(address(lUSDC)) / 1e12);
-      _computedAmount = (_amount * (_tokenPriceInEth / _usdcPriceInEth));
-
-      loanAmount = getNotionalLoanAmountIn1e18(
-        _computedAmount,
-        _leverage
-      );
-    } else {
-      // the rest of the contracts just borrow whatever token is supplied
-      _tokenToBorrow = _token;
-      loanAmount = getNotionalLoanAmountIn1e18(
-        _amount, // we can just send over the exact amount
-        _leverage
-      );
-    }
+    (loanAmount, tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
 
     // factor in any balancer fees into the overall loan amount we wish to borrow
     uint256 currentBalancerFeeAmount = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
     uint256 loanAmountFactoringInFeeAmount = loanAmount + currentBalancerFeeAmount;
 
-    if (_tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmountFactoringInFeeAmount) revert FAILED('balancer vault token balance < loan');
+    if (tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmountFactoringInFeeAmount) revert FAILED('balancer vault token balance < loan');
     emit Loan(loanAmountFactoringInFeeAmount);
-    emit BalanceOf(_tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmountFactoringInFeeAmount);
+    emit BalanceOf(tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmountFactoringInFeeAmount);
 
     IERC20[] memory tokens = new IERC20[](1);
-    tokens[0] = _tokenToBorrow;
+    tokens[0] = tokenToBorrow;
 
     uint256[] memory loanAmounts = new uint256[](1);
     loanAmounts[0] = loanAmountFactoringInFeeAmount;
@@ -165,15 +187,14 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     UserData memory userData = UserData({
       user: msg.sender,
       tokenAmount: _amount,
-      borrowedToken: _tokenToBorrow,
+      borrowedToken: tokenToBorrow,
       borrowedAmount: loanAmountFactoringInFeeAmount,
       tokenToLoop: _token
     });
-    emit UserDataEvent(msg.sender, _amount, address(_tokenToBorrow), loanAmountFactoringInFeeAmount, address(_token));
+    emit UserDataEvent(msg.sender, _amount, address(tokenToBorrow), loanAmountFactoringInFeeAmount, address(_token));
 
     BALANCER_VAULT.flashLoan(IFlashLoanRecipient(this), tokens, loanAmounts, abi.encode(userData));
   }
-  
 
   function receiveFlashLoan(
     IERC20[] memory tokens,
@@ -252,14 +273,47 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
   function getGLPPrice() internal view returns (uint256) {
     uint256 price = PLVGLP_ORACLE.getGLPPrice();
     require(price > 0, "invalid glp price returned");
-
-    // price = div_(price, Exp({mantissa: getPriceFromChainlink(ethUsdAggregator)}));
-
-    //glp oracle returns price scaled to 18 decimals, no need to extend here
-    return price;
+    return price; //glp oracle returns price scaled to 18 decimals, no need to extend here
   }
 
   function getNotionalLoanAmountIn1e18(
+    IERC20 _token,
+    uint256 _amount,
+    uint16 _leverage
+  ) private view returns (uint256, IERC20) {
+
+    // declare consts
+    IERC20 _tokenToBorrow;
+    uint256 _loanAmount;
+
+    if (_token == PLVGLP) {
+      uint256 _tokenPriceInEth;
+      uint256 _usdcPriceInEth;
+      uint256 _computedAmount;
+
+      // plvGLP borrows USDC to loop
+      _tokenToBorrow = USDC;
+      _tokenPriceInEth = PRICE_ORACLE.getUnderlyingPrice(address(lTokenMapping[_token]));
+      _usdcPriceInEth = (PRICE_ORACLE.getUnderlyingPrice(address(lUSDC)) / 1e12);
+      _computedAmount = (_amount * (_tokenPriceInEth / _usdcPriceInEth));
+
+      _loanAmount = _getNotionalLoanAmountIn1e18(
+        _computedAmount,
+        _leverage
+      );
+    } else {
+      // the rest of the contracts just borrow whatever token is supplied
+      _tokenToBorrow = _token;
+      _loanAmount = _getNotionalLoanAmountIn1e18(
+        _amount, // we can just send over the exact amount
+        _leverage
+      );
+    }
+
+    return (_loanAmount, _tokenToBorrow);
+  }
+
+  function _getNotionalLoanAmountIn1e18(
     uint256 _notionalTokenAmountIn1e18,
     uint16 _leverage
   ) private pure returns (uint256) {

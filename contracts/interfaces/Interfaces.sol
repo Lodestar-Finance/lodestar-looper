@@ -83,3 +83,8 @@ interface IProtocolFeesCollector {
 interface IGlpOracleInterface {
   function getGLPPrice() external view returns (uint256);
 }
+
+interface IUnitrollerInterface {
+  function getAccountLiquidity(address account) external view returns (uint256, uint256, uint256);
+  function getHypotheticalAccountLiquidity(address account, address cTokenModify, uint256 redeemTokens, uint256 borrowTokens) external view returns (uint256, uint256, uint256);
+}
