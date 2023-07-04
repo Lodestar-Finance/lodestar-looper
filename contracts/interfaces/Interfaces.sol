@@ -73,6 +73,7 @@ interface ICERC20 is IERC20, ICERC20Update {
 
 interface IPriceOracleProxyETH {
   function getUnderlyingPrice(address cToken) external view returns (uint256);
+
 }
 
 // 6/26/2023: https://docs.balancer.fi/reference/contracts/deployment-addresses/mainnet.html#gauges-and-governance
@@ -82,6 +83,7 @@ interface IProtocolFeesCollector {
 
 interface IGlpOracleInterface {
   function getGLPPrice() external view returns (uint256);
+  function getPlvGLPPrice() external view returns (uint256);
 }
 
 interface IUnitrollerInterface {

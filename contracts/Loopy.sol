@@ -131,15 +131,18 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       // if the account is still healthy without factoring in our newly supplied balance, we know for a fact they can support this operation.
       // so let's just return now and not waste any more time
       if (hypotheticalLiquidity > 0) {
-        return hypotheticalShortfall; // 0
+        return 0;
       } else {
         // otherwise, lets do some maths
         // lets get our hypotheticalSupply and and see if it's greater than our hypotheticalShortfall. if it is, we know the account can support this operation
-        hypotheticalSupply = 1;
+        uint256 plvGLPPriceInEth = PLVGLP_ORACLE.getPlvGLPPrice();
+        hypotheticalSupply = plvGLPPriceInEth * loanAmount;
+        if (hypotheticalSupply > hypotheticalShortfall) {
+          return 0;
+        } else {
+          return 1;
+        }
       }
-
-      // require success
-      return _amount + 1;
     }
   }
 
