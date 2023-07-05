@@ -184,7 +184,6 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     (loanAmount, tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
 
     if (tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmount) revert FAILED('balancer vault token balance < loan');
-    emit Loan(loanAmountFactoringInFeeAmount);
     emit BalanceOf(tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmount);
 
     IERC20[] memory tokens = new IERC20[](1);
@@ -270,6 +269,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     // factor in any balancer fees into the overall loan amount we wish to borrow
     uint256 currentBalancerFeeAmount = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
     uint256 repayAmountFactoringInFeeAmount = data.borrowedAmount + currentBalancerFeeAmount;
+    emit Loan(repayAmountFactoringInFeeAmount);
 
     if (data.tokenToLoop == PLVGLP) {
       // plvGLP requires us to repay the loan with USDC
