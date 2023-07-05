@@ -31,14 +31,14 @@ contract LoopyConstants {
     IGlpDepositor(0xEAE85745232983CF117692a1CE2ECf3d19aDA683);
 
   // LODESTAR
-  ICERC20 internal constant lUSDC = ICERC20(0xF17C9D4062e2e652f81E43f9304EdDE3Fb3e63dB);
-  ICERC20 internal constant lPLVGLP = ICERC20(0xE728c318A6fD3b605726E810C2c542FD8056708c);
+  ICERC20 internal constant lUSDC = ICERC20(0xeF25968ECC2f13b6272a37312a409D429DEF70AB);
+  ICERC20 internal constant lPLVGLP = ICERC20(0xDFD276A2460eDb150DE2622f2D947EEa21C3EE48);
   IUnitrollerInterface internal constant UNITROLLER =
     IUnitrollerInterface(0xa973821E201B2C398063AC9c9B6B011D6FE5dfa3);
   IGlpOracleInterface internal constant PLVGLP_ORACLE =
     IGlpOracleInterface(0x5ba0828A5488c20a9C6521a90ecc9c49e5390604);
   IPriceOracleProxyETH internal constant PRICE_ORACLE =
-    IPriceOracleProxyETH(0x911927A2E313E142FD92002f854483fF5a800b7e);
+    IPriceOracleProxyETH(0x569dd9Bc87c7eB5De658c912d21ccB661aA249bD);
 
   // no testnet contracts, so putting main for now for future use
   ICERC20 internal constant lARB = ICERC20(0xe57390EB5F0dd76B545d7349845839Ad6A4faee8);

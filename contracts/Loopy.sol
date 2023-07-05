@@ -139,8 +139,12 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
           uint256 plvGLPPriceInEth = PLVGLP_ORACLE.getPlvGLPPrice();
           hypotheticalSupply = plvGLPPriceInEth * loanAmount;
         } else {
-          uint256 tokenPriceInEth = PRICE_ORACLE.getUnderlyingPrice(address(lTokenMapping[tokenToBorrow])); // TODO: decimals -- need to scale?
-          hypotheticalSupply = tokenPriceInEth * loanAmount;
+          // Scale price
+          uint256 tokenPriceInEth = PRICE_ORACLE.getUnderlyingPrice(address(lTokenMapping[tokenToBorrow]));
+          uint256 decimalScale = 18 - decimals[tokenToBorrow];
+          uint256 decimalExp = (10 ** decimalScale);
+          uint256 price = tokenPriceInEth / decimalExp;
+          hypotheticalSupply = price * loanAmount;
         }
 
         if (hypotheticalSupply > hypotheticalShortfall) { 
@@ -179,28 +183,24 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
 
     (loanAmount, tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
 
-    // factor in any balancer fees into the overall loan amount we wish to borrow
-    uint256 currentBalancerFeeAmount = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
-    uint256 loanAmountFactoringInFeeAmount = loanAmount + currentBalancerFeeAmount;
-
-    if (tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmountFactoringInFeeAmount) revert FAILED('balancer vault token balance < loan');
+    if (tokenToBorrow.balanceOf(address(BALANCER_VAULT)) < loanAmount) revert FAILED('balancer vault token balance < loan');
     emit Loan(loanAmountFactoringInFeeAmount);
-    emit BalanceOf(tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmountFactoringInFeeAmount);
+    emit BalanceOf(tokenToBorrow.balanceOf(address(BALANCER_VAULT)), loanAmount);
 
     IERC20[] memory tokens = new IERC20[](1);
     tokens[0] = tokenToBorrow;
 
     uint256[] memory loanAmounts = new uint256[](1);
-    loanAmounts[0] = loanAmountFactoringInFeeAmount;
+    loanAmounts[0] = loanAmount;
 
     UserData memory userData = UserData({
       user: msg.sender,
       tokenAmount: _amount,
       borrowedToken: tokenToBorrow,
-      borrowedAmount: loanAmountFactoringInFeeAmount,
+      borrowedAmount: loanAmount,
       tokenToLoop: _token
     });
-    emit UserDataEvent(msg.sender, _amount, address(tokenToBorrow), loanAmountFactoringInFeeAmount, address(_token));
+    emit UserDataEvent(msg.sender, _amount, address(tokenToBorrow), loanAmount, address(_token));
 
     BALANCER_VAULT.flashLoan(IFlashLoanRecipient(this), tokens, loanAmounts, abi.encode(userData));
   }
@@ -267,15 +267,19 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       require(_finalBal == 0, "lToken balance not 0 at the end of loop");
     }
 
+    // factor in any balancer fees into the overall loan amount we wish to borrow
+    uint256 currentBalancerFeeAmount = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
+    uint256 repayAmountFactoringInFeeAmount = data.borrowedAmount + currentBalancerFeeAmount;
+
     if (data.tokenToLoop == PLVGLP) {
       // plvGLP requires us to repay the loan with USDC
-      lUSDC.borrowBehalf(data.borrowedAmount, data.user);
-      USDC.safeTransferFrom(data.user, msg.sender, data.borrowedAmount);
+      lUSDC.borrowBehalf(repayAmountFactoringInFeeAmount, data.user);
+      USDC.safeTransferFrom(data.user, msg.sender, repayAmountFactoringInFeeAmount);
     } else {
       // call borrowBehalf to borrow tokens on behalf of user
-      lTokenMapping[data.tokenToLoop].borrowBehalf(data.borrowedAmount, data.user);
+      lTokenMapping[data.tokenToLoop].borrowBehalf(repayAmountFactoringInFeeAmount, data.user);
       // repay loan, where msg.sender = vault
-      data.tokenToLoop.safeTransferFrom(data.user, msg.sender, data.borrowedAmount);
+      data.tokenToLoop.safeTransferFrom(data.user, msg.sender, repayAmountFactoringInFeeAmount);
     }
   }
 
