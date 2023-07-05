@@ -106,7 +106,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       delete lTokenMapping[tokenAddress];
   }
 
-  function mockLoop(IERC20 _token, uint256 _amount, uint16 _leverage) external view returns (uint256) {
+  function mockLoop(IERC20 _token, uint256 _amount, uint16 _leverage, address _user) external view returns (uint256) {
     {
       uint256 error;
       uint256 liquidity;
@@ -117,8 +117,8 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       uint256 hypotheticalSupply;
 
       // gather current account liquidity, which is the eth denominated value of the maximum borrowable amount before the account reaches a shortfall (negative health aka liquidatable)
-      (error, liquidity, shortfall) = UNITROLLER.getAccountLiquidity(msg.sender);
-      require(error != 0, "Received an error when getting account liquidity during mockLoop");
+      (error, liquidity, shortfall) = UNITROLLER.getAccountLiquidity(_user);
+      require(error == 0, "Received an error when getting account liquidity during mockLoop");
 
       uint256 loanAmount;
       IERC20 tokenToBorrow;
@@ -126,21 +126,27 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
       (loanAmount, tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
 
       // mock a hypothetical borrow to see what state it puts the account in (before factoring in our new liquidity)
-      (hypotheticalError, hypotheticalLiquidity, hypotheticalShortfall) = UNITROLLER.getHypotheticalAccountLiquidity(msg.sender, address(lTokenMapping[tokenToBorrow]), 0, loanAmount);
+      (hypotheticalError, hypotheticalLiquidity, hypotheticalShortfall) = UNITROLLER.getHypotheticalAccountLiquidity(_user, address(lTokenMapping[tokenToBorrow]), 0, loanAmount);
 
       // if the account is still healthy without factoring in our newly supplied balance, we know for a fact they can support this operation.
       // so let's just return now and not waste any more time
       if (hypotheticalLiquidity > 0) {
-        return 0;
+        return 0; // pass
       } else {
         // otherwise, lets do some maths
         // lets get our hypotheticalSupply and and see if it's greater than our hypotheticalShortfall. if it is, we know the account can support this operation
-        uint256 plvGLPPriceInEth = PLVGLP_ORACLE.getPlvGLPPrice();
-        hypotheticalSupply = plvGLPPriceInEth * loanAmount;
-        if (hypotheticalSupply > hypotheticalShortfall) {
-          return 0;
+        if (_token == PLVGLP) {
+          uint256 plvGLPPriceInEth = PLVGLP_ORACLE.getPlvGLPPrice();
+          hypotheticalSupply = plvGLPPriceInEth * loanAmount;
         } else {
-          return 1;
+          uint256 tokenPriceInEth = PRICE_ORACLE.getUnderlyingPrice(address(lTokenMapping[tokenToBorrow])); // TODO: decimals -- need to scale?
+          hypotheticalSupply = tokenPriceInEth * loanAmount;
+        }
+
+        if (hypotheticalSupply > hypotheticalShortfall) { 
+          return 0; // pass
+        } else {
+          return 1; // fail
         }
       }
     }
@@ -156,7 +162,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     // mock loop when the user wants to use their existing lodestar balance.
     // if it fails we know the account cannot loop in the current state they are in
     if (_useWalletBalance == 0) {
-      uint256 shortfall = this.mockLoop(_token, _amount, _leverage);
+      uint256 shortfall = this.mockLoop(_token, _amount, _leverage, msg.sender);
       require (shortfall != 0, "Existing balance on Lodestar unable to support operation. Please consider increasing your supply balance first.");
     }
 
