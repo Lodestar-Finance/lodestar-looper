@@ -34,7 +34,7 @@ contract LoopyConstants {
   ICERC20 internal constant lUSDC = ICERC20(0xF17C9D4062e2e652f81E43f9304EdDE3Fb3e63dB);
   ICERC20 internal constant lPLVGLP = ICERC20(0xE728c318A6fD3b605726E810C2c542FD8056708c);
   IUnitrollerInterface internal constant UNITROLLER =
-    IUnitrollerInterface(0x92a62f8c4750D7FbDf9ee1dB268D18169235117B);
+    IUnitrollerInterface(0xa973821E201B2C398063AC9c9B6B011D6FE5dfa3);
   IGlpOracleInterface internal constant PLVGLP_ORACLE =
     IGlpOracleInterface(0x5ba0828A5488c20a9C6521a90ecc9c49e5390604);
   IPriceOracleProxyETH internal constant PRICE_ORACLE =

@@ -163,7 +163,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     // if it fails we know the account cannot loop in the current state they are in
     if (_useWalletBalance == 0) {
       uint256 shortfall = this.mockLoop(_token, _amount, _leverage, msg.sender);
-      require (shortfall != 0, "Existing balance on Lodestar unable to support operation. Please consider increasing your supply balance first.");
+      require (shortfall == 0, "Existing balance on Lodestar unable to support operation. Please consider increasing your supply balance first.");
     }
 
     // if the user wants us to mint using their existing wallet balance (indiciated with 1), then do so.
