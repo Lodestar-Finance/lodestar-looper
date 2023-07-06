@@ -140,7 +140,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
         if (_token == PLVGLP) {
           uint256 plvGLPPriceInEth = PLVGLP_ORACLE.getPlvGLPPrice();
           tokenDecimals = (10 ** (decimals[PLVGLP]));
-          hypotheticalSupply = (plvGLPPriceInEth * (loanAmount * collateralFactor[PLVGLP])) / tokenDecimals;
+          hypotheticalSupply = (plvGLPPriceInEth * (loanAmount * (collateralFactor[PLVGLP] / 1e18))) / tokenDecimals;
           
         } else {
           // tokenToBorrow == _token in every instance that doesn't involve plvGLP (which borrows USDC)
@@ -149,7 +149,7 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
           decimalExp = (10 ** decimalScale);
           price = tokenPriceInEth / decimalExp;
           tokenDecimals = (10 ** (decimals[tokenToBorrow]));
-          hypotheticalSupply = (price * (loanAmount * collateralFactor[tokenToBorrow])) / tokenDecimals;
+          hypotheticalSupply = (price * (loanAmount * (collateralFactor[tokenToBorrow] / 1e18))) / tokenDecimals;
         }
 
         if (hypotheticalSupply > hypotheticalShortfall) { 
