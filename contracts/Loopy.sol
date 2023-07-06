@@ -16,6 +16,8 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
   mapping(IERC20 => bool) public allowedTokens;
   // add mapping to store lToken contracts
   mapping(IERC20 => ICERC20) private lTokenMapping;
+  // add mapping to store lToken collateral factors
+  mapping(IERC20 => uint64) private collateralFactor;
 
   constructor() {
     // initialize decimals for each token
@@ -45,6 +47,15 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
     lTokenMapping[FRAX] = lFRAX;
     lTokenMapping[ARB] = lARB;
     lTokenMapping[PLVGLP] = lPLVGLP;
+
+    // map lTokens to collateralFactors
+    collateralFactor[USDC] = 820000000000000000;
+    collateralFactor[USDT] = 700000000000000000;
+    collateralFactor[WBTC] = 750000000000000000;
+    collateralFactor[DAI] = 750000000000000000;
+    collateralFactor[FRAX] = 750000000000000000;
+    collateralFactor[ARB] = 700000000000000000;
+    collateralFactor[PLVGLP] = 750000000000000000;
 
     // approve glp contracts to spend USDC for minting GLP
     USDC.approve(address(REWARD_ROUTER_V2), type(uint256).max);
@@ -108,25 +119,16 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
 
   function mockLoop(IERC20 _token, uint256 _amount, uint16 _leverage, address _user) external view returns (uint256) {
     {
-      uint256 error;
-      uint256 liquidity;
-      uint256 shortfall;
-      uint256 hypotheticalError;
-      uint256 hypotheticalLiquidity;
-      uint256 hypotheticalShortfall;
       uint256 hypotheticalSupply;
+      uint256 decimalScale;
+      uint256 decimalExp;
+      uint256 tokenDecimals;
+      uint256 price;
 
-      // gather current account liquidity, which is the eth denominated value of the maximum borrowable amount before the account reaches a shortfall (negative health aka liquidatable)
-      (error, liquidity, shortfall) = UNITROLLER.getAccountLiquidity(_user);
-      require(error == 0, "Received an error when getting account liquidity during mockLoop");
-
-      uint256 loanAmount;
-      IERC20 tokenToBorrow;
-
-      (loanAmount, tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
+      (uint256 loanAmount, IERC20 tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
 
       // mock a hypothetical borrow to see what state it puts the account in (before factoring in our new liquidity)
-      (hypotheticalError, hypotheticalLiquidity, hypotheticalShortfall) = UNITROLLER.getHypotheticalAccountLiquidity(_user, address(lTokenMapping[tokenToBorrow]), 0, loanAmount);
+      ( , uint256 hypotheticalLiquidity, uint256 hypotheticalShortfall) = UNITROLLER.getHypotheticalAccountLiquidity(_user, address(lTokenMapping[tokenToBorrow]), 0, loanAmount);
 
       // if the account is still healthy without factoring in our newly supplied balance, we know for a fact they can support this operation.
       // so let's just return now and not waste any more time
@@ -137,14 +139,17 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
         // lets get our hypotheticalSupply and and see if it's greater than our hypotheticalShortfall. if it is, we know the account can support this operation
         if (_token == PLVGLP) {
           uint256 plvGLPPriceInEth = PLVGLP_ORACLE.getPlvGLPPrice();
-          hypotheticalSupply = plvGLPPriceInEth * loanAmount;
+          tokenDecimals = (10 ** (decimals[PLVGLP]));
+          hypotheticalSupply = (plvGLPPriceInEth * (loanAmount * collateralFactor[PLVGLP])) / tokenDecimals;
+          
         } else {
-          // Scale price
+          // tokenToBorrow == _token in every instance that doesn't involve plvGLP (which borrows USDC)
           uint256 tokenPriceInEth = PRICE_ORACLE.getUnderlyingPrice(address(lTokenMapping[tokenToBorrow]));
-          uint256 decimalScale = 18 - decimals[tokenToBorrow];
-          uint256 decimalExp = (10 ** decimalScale);
-          uint256 price = tokenPriceInEth / decimalExp;
-          hypotheticalSupply = price * loanAmount;
+          decimalScale = 18 - decimals[tokenToBorrow];
+          decimalExp = (10 ** decimalScale);
+          price = tokenPriceInEth / decimalExp;
+          tokenDecimals = (10 ** (decimals[tokenToBorrow]));
+          hypotheticalSupply = (price * (loanAmount * collateralFactor[tokenToBorrow])) / tokenDecimals;
         }
 
         if (hypotheticalSupply > hypotheticalShortfall) { 
