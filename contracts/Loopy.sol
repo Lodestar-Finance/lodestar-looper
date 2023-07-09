@@ -170,8 +170,14 @@ contract Loopy is ILoopy, LoopyConstants, Ownable2Step, IFlashLoanRecipient, Ree
 
     // mock loop when the user wants to use their existing lodestar balance.
     // if it fails we know the account cannot loop in the current state they are in
-    if (_useWalletBalance == 0) {
+    if (_useWalletBalance == 0 && _token != PLVGLP) {
       uint256 shortfall = this.mockLoop(_token, _amount, _leverage, msg.sender);
+      require (shortfall == 0, "Existing balance on Lodestar unable to support operation. Please consider increasing your supply balance first.");
+    }
+
+    if (_useWalletBalance == 0 && _token == PLVGLP) {
+      uint256 amountPlusSlippage = _amount * 101 / 100;
+      uint256 shortfall = this.mockLoop(_token, amountPlusSlippage, _leverage, msg.sender);
       require (shortfall == 0, "Existing balance on Lodestar unable to support operation. Please consider increasing your supply balance first.");
     }
 
