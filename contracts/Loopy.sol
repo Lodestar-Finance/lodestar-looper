@@ -345,6 +345,9 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
                 nativeUSDCBalance,
                 data.borrowedAmount
             );
+            // transfer bridged USDC back to the user so we can repay the loan
+            USDC_BRIDGED.safeTransferFrom(address(this), data.user, repayAmountFactoringInFeeAmount);
+            emit Transfer(address(this), data.user, repayAmountFactoringInFeeAmount);
             // repay loan, where msg.sender = vault
             USDC_BRIDGED.safeTransferFrom(data.user, msg.sender, repayAmountFactoringInFeeAmount);
             // transfer remaining bridged USDC back to the user
