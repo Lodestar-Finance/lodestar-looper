@@ -302,9 +302,6 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
                     bridgedUSDCBalance,
                     data.borrowedAmount
                 );
-                // transfer remaining bridged USDC back to the user
-                uint256 remainingBridgedUSDCBalance = USDC_BRIDGED.balanceOf(address(this));
-                USDC_BRIDGED.safeTransferFrom(address(this), data.user, remainingBridgedUSDCBalance);
             }
             lTokenMapping[data.tokenToLoop].mint(data.tokenToLoop.balanceOf(address(this)));
             lTokenMapping[data.tokenToLoop].transfer(
