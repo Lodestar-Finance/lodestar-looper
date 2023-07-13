@@ -293,6 +293,19 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
 
         // mint our respective token by depositing it into Lodestar's respective lToken contract (approval needed)
         unchecked {
+            // if we are in the native usdc loop flow, let's make sure we swap our borrowed bridged usdc from balancer for native usdc before minting
+            if (data.tokenToLoop == USDC_NATIVE) {
+                uint256 bridgedUSDCBalance = USDC_BRIDGED.balanceOf(address(this));
+                Swap.swapThroughUniswap(
+                    address(USDC_NATIVE),
+                    address(USDC_BRIDGED),
+                    nativeUSDCBalance,
+                    data.borrowedAmount
+                );
+                // transfer remaining bridged USDC back to the user
+                uint256 remainingBridgedUSDCBalance = USDC_BRIDGED.balanceOf(address(this));
+                USDC_BRIDGED.safeTransferFrom(address(this), data.user, remainingBridgedUSDCBalance);
+            }
             lTokenMapping[data.tokenToLoop].mint(data.tokenToLoop.balanceOf(address(this)));
             lTokenMapping[data.tokenToLoop].transfer(
                 data.user,
@@ -324,7 +337,10 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         if (data.tokenToLoop == PLVGLP || data.tokenToLoop == USDC_NATIVE) {
             // plvGLP requires us to repay the loan with USDC
             lUSDC.borrowBehalf(repayAmountFactoringInFeeAmount, data.user);
-            //we need to swap our native USDC for bridged USDC to repay the loan
+            // transfer native USDC back into the contract after borrowing bridged USDC
+            USDC_NATIVE.safeTransferFrom(msg.sender, address(this), repayAmountFactoringInFeeAmount);
+            emit Transfer(msg.sender, address(this), repayAmountFactoringInFeeAmount);
+            // we need to swap our native USDC for bridged USDC to repay the loan
             uint256 nativeUSDCBalance = USDC_NATIVE.balanceOf(address(this));
             Swap.swapThroughUniswap(
                 address(USDC_NATIVE),
@@ -332,7 +348,9 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
                 nativeUSDCBalance,
                 data.borrowedAmount
             );
+            // repay loan, where msg.sender = vault
             USDC_BRIDGED.safeTransferFrom(data.user, msg.sender, repayAmountFactoringInFeeAmount);
+            // transfer remaining bridged USDC back to the user
             uint256 remainingBridgedUSDCBalance = USDC_BRIDGED.balanceOf(address(this));
             USDC_BRIDGED.safeTransferFrom(address(this), data.user, remainingBridgedUSDCBalance);
         } else {
