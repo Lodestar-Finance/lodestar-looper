@@ -297,9 +297,9 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             if (data.tokenToLoop == USDC_NATIVE) {
                 uint256 bridgedUSDCBalance = USDC_BRIDGED.balanceOf(address(this));
                 Swap.swapThroughUniswap(
-                    address(USDC_NATIVE),
                     address(USDC_BRIDGED),
-                    nativeUSDCBalance,
+                    address(USDC_NATIVE),
+                    bridgedUSDCBalance,
                     data.borrowedAmount
                 );
                 // transfer remaining bridged USDC back to the user
