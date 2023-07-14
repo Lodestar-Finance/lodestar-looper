@@ -205,7 +205,7 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             );
         }
 
-        if (_useWalletBalance == 0 && _token == PLVGLP) {
+        if (_useWalletBalance == 0 && _token == PLVGLP || _token == USDC_NATIVE) {
             uint256 amountPlusSlippage = (_amount * 101) / 100;
             uint256 shortfall = this.mockLoop(_token, amountPlusSlippage, _leverage, msg.sender);
             require(
