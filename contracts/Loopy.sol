@@ -372,7 +372,7 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             USDC_BRIDGED.safeTransferFrom(address(this), data.user, remainingBridgedUSDCBalance);
         } else {
             // call borrowBehalf to borrow tokens on behalf of user
-            lTokenMapping[data.tokenToLoop].borrowBehalf(repayAmountFactoringInFeeAmount, data.user);
+            lTokenMapping[data.tokenToLoop].borrowBehalf(repayAmountFactoringInBothFeeAmounts, data.user);
             // take the protocol fee while for the respective lToken market
             lTokenMapping[data.tokenToLoop]._add_reserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
             // repay loan, where msg.sender = vault
