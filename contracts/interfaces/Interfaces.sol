@@ -69,6 +69,9 @@ interface ICERC20 is IERC20, ICERC20Update {
 
     // Cerc20
     function mint(uint256 mintAmount) external returns (uint256);
+
+    // Cerc20
+    function _addReserves(uint256 addAmount) external returns (uint256);
 }
 
 interface IPriceOracleProxyETH {

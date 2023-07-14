@@ -58,6 +58,10 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         collateralFactor[ARB] = 700000000000000000;
         collateralFactor[PLVGLP] = 750000000000000000;
 
+        // set default fee percentage (can be updated via admin function below)
+        // 25 basis points
+        uint256 protocolFeePercentage = 25;
+
         // approve glp contracts to spend USDC for minting GLP
         USDC_BRIDGED.approve(address(REWARD_ROUTER_V2), type(uint256).max);
         USDC_BRIDGED.approve(address(GLP), type(uint256).max);
@@ -102,6 +106,7 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
     event lTokenBalance(uint256 balanceAmount);
     event Received(address, uint);
     event BalancerFeeAmount(uint256 amount);
+    event ProtocolFeeUpdated(uint256 newProtocolFee);
 
     function addToken(IERC20 tokenAddress, uint8 tokenDecimals, ICERC20 lTokenAddress) external onlyOwner {
         require(!allowedTokens[tokenAddress], "token already allowed");
@@ -124,6 +129,11 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         // nullify, essentially, existing records
         delete decimals[tokenAddress];
         delete lTokenMapping[tokenAddress];
+    }
+
+    function updateProtocolFeePercentage(uint256 _protocolFeePercentage) external onlyOwner {
+        protocolFeePercentage = _protocolFeePercentage;
+        emit ProtocolFeeUpdated(protocolFeePercentage);
     }
 
     function mockLoop(IERC20 _token, uint256 _amount, uint16 _leverage, address _user) external view returns (uint256) {
@@ -324,9 +334,11 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         //if the loop token is plvGLP or native USDC, we need to borrow a little more to account for fees/slippage on the swap back to bridged USDC
         if (data.tokenToLoop == PLVGLP || data.tokenToLoop == USDC_NATIVE) {
             baseBorrowAmount = (data.borrowedAmount * 101) / 100;
-            repayAmountFactoringInFeeAmount = baseBorrowAmount + currentBalancerFeeAmount;
+            // add in the various fees (balancer and protocol)
+            repayAmountFactoringInFeeAmount = (baseBorrowAmount + currentBalancerFeeAmount) * protocolFeePercentage;
         } else {
-            repayAmountFactoringInFeeAmount = data.borrowedAmount + currentBalancerFeeAmount;
+            // add in the various fees (balancer and protocol)
+            repayAmountFactoringInFeeAmount = (data.borrowedAmount + currentBalancerFeeAmount) * protocolFeePercentage;
         }
 
         emit Loan(repayAmountFactoringInFeeAmount);
@@ -414,4 +426,6 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             return ((_leverage - DIVISOR) * _notionalTokenAmountIn1e18) / DIVISOR;
         }
     }
+
+    function _takeFeePercentage()
 }
