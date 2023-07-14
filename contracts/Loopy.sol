@@ -326,29 +326,34 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
 
         uint256 baseBorrowAmount;
         uint256 repayAmountFactoringInFeeAmount;
+        uint256 repayAmountFactoringInBothFeeAmounts;
 
         // factor in any balancer fees into the overall loan amount we wish to borrow
         uint256 currentBalancerFeePercentage = BALANCER_PROTOCOL_FEES_COLLECTOR.getFlashLoanFeePercentage();
         uint256 currentBalancerFeeAmount = (data.borrowedAmount * currentBalancerFeePercentage) / 1e18;
 
-        //if the loop token is plvGLP or native USDC, we need to borrow a little more to account for fees/slippage on the swap back to bridged USDC
+        // if the loop token is plvGLP or native USDC, we need to borrow a little more to account for fees/slippage on the swap back to bridged USDC
         if (data.tokenToLoop == PLVGLP || data.tokenToLoop == USDC_NATIVE) {
             baseBorrowAmount = (data.borrowedAmount * 101) / 100;
             // add in the various fees (balancer and protocol)
-            repayAmountFactoringInFeeAmount = (data.borrowedAmount + currentBalancerFeeAmount) * (10000 + protocolFeePercentage) / 10000;
+            repayAmountFactoringInFeeAmount = data.borrowedAmount + currentBalancerFeeAmount;
+            repayAmountFactoringInBothFeeAmounts = repayAmountFactoringInFeeAmount * (10000 + protocolFeePercentage) / 10000;
         } else {
             // add in the various fees (balancer and protocol)
-            repayAmountFactoringInFeeAmount = (data.borrowedAmount + currentBalancerFeeAmount) * (10000 + protocolFeePercentage) / 10000;
+            repayAmountFactoringInFeeAmount = data.borrowedAmount + currentBalancerFeeAmount;
+            repayAmountFactoringInBothFeeAmounts = repayAmountFactoringInFeeAmount * (10000 + protocolFeePercentage) / 10000;
         }
 
         emit Loan(repayAmountFactoringInFeeAmount);
 
         if (data.tokenToLoop == PLVGLP || data.tokenToLoop == USDC_NATIVE) {
             // plvGLP requires us to repay the loan with USDC
-            lUSDC.borrowBehalf(repayAmountFactoringInFeeAmount, data.user);
+            lUSDC.borrowBehalf(repayAmountFactoringInBothFeeAmounts, data.user);
             // transfer native USDC back into the contract after borrowing bridged USDC
-            USDC_NATIVE.safeTransferFrom(msg.sender, address(this), repayAmountFactoringInFeeAmount);
-            emit Transfer(msg.sender, address(this), repayAmountFactoringInFeeAmount);
+            USDC_NATIVE.safeTransferFrom(msg.sender, address(this), repayAmountFactoringInBothFeeAmounts);
+            emit Transfer(msg.sender, address(this), repayAmountFactoringInBothFeeAmounts);
+            // take the protocol fee while we still have native USDC and deposit it into the lUSDC market reserves
+            USDC_NATIVE._add_reserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
             // we need to swap our native USDC for bridged USDC to repay the loan
             uint256 nativeUSDCBalance = USDC_NATIVE.balanceOf(address(this));
             Swap.swapThroughUniswap(
@@ -368,6 +373,8 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         } else {
             // call borrowBehalf to borrow tokens on behalf of user
             lTokenMapping[data.tokenToLoop].borrowBehalf(repayAmountFactoringInFeeAmount, data.user);
+            // take the protocol fee while for the respective lToken market
+            lTokenMapping[data.tokenToLoop]._add_reserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
             // repay loan, where msg.sender = vault
             data.tokenToLoop.safeTransferFrom(data.user, msg.sender, repayAmountFactoringInFeeAmount);
         }
