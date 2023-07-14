@@ -147,6 +147,8 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
 
             (uint256 loanAmount, IERC20 tokenToBorrow) = getNotionalLoanAmountIn1e18(_token, _amount, _leverage);
 
+            loanAmount = loanAmount * (10000 + protocolFeePercentage) / 10000;
+
             // mock a hypothetical borrow to see what state it puts the account in (before factoring in our new liquidity)
             (, uint256 hypotheticalLiquidity, uint256 hypotheticalShortfall) = UNITROLLER
                 .getHypotheticalAccountLiquidity(_user, address(lTokenMapping[tokenToBorrow]), 0, loanAmount);
