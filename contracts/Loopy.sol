@@ -304,7 +304,7 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         // mint our respective token by depositing it into Lodestar's respective lToken contract (approval needed)
         unchecked {
             // if we are in the native usdc loop flow, let's make sure we swap our borrowed bridged usdc from balancer for native usdc before minting
-            if (data.tokenToLoop == USDC_NATIVE) {
+            if (data.tokenToLoop == PLVGLP || data.tokenToLoop == USDC_NATIVE) {
                 uint256 bridgedUSDCBalance = USDC_BRIDGED.balanceOf(address(this));
                 Swap.swapThroughUniswap(
                     address(USDC_BRIDGED),
