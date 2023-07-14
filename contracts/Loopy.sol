@@ -20,6 +20,11 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
     // add mapping to store lToken collateral factors
     mapping(IERC20 => uint64) private collateralFactor;
 
+
+    // set default fee percentage (can be updated via admin function below)
+    // 25 basis points
+    uint256 protocolFeePercentage = 25;
+
     constructor() {
         // initialize decimals for each token
         decimals[USDC_NATIVE] = 6;
@@ -57,10 +62,6 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         collateralFactor[FRAX] = 750000000000000000;
         collateralFactor[ARB] = 700000000000000000;
         collateralFactor[PLVGLP] = 750000000000000000;
-
-        // set default fee percentage (can be updated via admin function below)
-        // 25 basis points
-        uint256 protocolFeePercentage = 25;
 
         // approve glp contracts to spend USDC for minting GLP
         USDC_BRIDGED.approve(address(REWARD_ROUTER_V2), type(uint256).max);
@@ -353,7 +354,7 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             USDC_NATIVE.safeTransferFrom(msg.sender, address(this), repayAmountFactoringInBothFeeAmounts);
             emit Transfer(msg.sender, address(this), repayAmountFactoringInBothFeeAmounts);
             // take the protocol fee while we still have native USDC and deposit it into the lUSDC market reserves
-            USDC_NATIVE._add_reserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
+            lTokenMapping[USDC_NATIVE]._addReserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
             // we need to swap our native USDC for bridged USDC to repay the loan
             uint256 nativeUSDCBalance = USDC_NATIVE.balanceOf(address(this));
             Swap.swapThroughUniswap(
@@ -374,7 +375,7 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             // call borrowBehalf to borrow tokens on behalf of user
             lTokenMapping[data.tokenToLoop].borrowBehalf(repayAmountFactoringInBothFeeAmounts, data.user);
             // take the protocol fee while for the respective lToken market
-            lTokenMapping[data.tokenToLoop]._add_reserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
+            lTokenMapping[data.tokenToLoop]._addReserves((repayAmountFactoringInBothFeeAmounts - repayAmountFactoringInFeeAmount));
             // repay loan, where msg.sender = vault
             data.tokenToLoop.safeTransferFrom(data.user, msg.sender, repayAmountFactoringInFeeAmount);
         }
@@ -433,6 +434,4 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
             return ((_leverage - DIVISOR) * _notionalTokenAmountIn1e18) / DIVISOR;
         }
     }
-
-    function _takeFeePercentage()
 }

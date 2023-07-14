@@ -37,6 +37,7 @@ interface IRewardRouterV2 {
 
 interface ICERC20Update {
     function borrowBehalf(uint256 borrowAmount, address borrowee) external returns (uint256);
+    function _addReserves(uint256 addAmount) external returns (uint256);
 }
 
 interface ICERC20 is IERC20, ICERC20Update {
@@ -69,9 +70,6 @@ interface ICERC20 is IERC20, ICERC20Update {
 
     // Cerc20
     function mint(uint256 mintAmount) external returns (uint256);
-
-    // Cerc20
-    function _addReserves(uint256 addAmount) external returns (uint256);
 }
 
 interface IPriceOracleProxyETH {
