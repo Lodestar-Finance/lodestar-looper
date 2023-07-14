@@ -335,10 +335,10 @@ contract Loopy is ILoopy, LoopyConstants, Swap, Ownable2Step, IFlashLoanRecipien
         if (data.tokenToLoop == PLVGLP || data.tokenToLoop == USDC_NATIVE) {
             baseBorrowAmount = (data.borrowedAmount * 101) / 100;
             // add in the various fees (balancer and protocol)
-            repayAmountFactoringInFeeAmount = (baseBorrowAmount + currentBalancerFeeAmount) * protocolFeePercentage;
+            repayAmountFactoringInFeeAmount = (data.borrowedAmount + currentBalancerFeeAmount) * (10000 + protocolFeePercentage) / 10000;
         } else {
             // add in the various fees (balancer and protocol)
-            repayAmountFactoringInFeeAmount = (data.borrowedAmount + currentBalancerFeeAmount) * protocolFeePercentage;
+            repayAmountFactoringInFeeAmount = (data.borrowedAmount + currentBalancerFeeAmount) * (10000 + protocolFeePercentage) / 10000;
         }
 
         emit Loan(repayAmountFactoringInFeeAmount);
